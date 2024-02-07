@@ -41,7 +41,7 @@ type SaveData struct {
 	AddedData            models.SimpleData
 	DeletedData          models.SimpleData
 	ModifiedData         models.SimpleData
-	modifiedOriginalData models.SimpleData
+	ModifiedOriginalData models.SimpleData
 }
 
 type DifferentiatedSaveParameter struct {

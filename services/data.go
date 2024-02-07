@@ -215,7 +215,25 @@ func (s DataService) SaveByParameter(parameter viewmodels.SaveParameter) (int64,
 	return s.Save(parameter.Path, parameter.Name, parameter.Data, parameter.ActionId)
 }
 
-func (s DataService) PostDifferentiatedSave(path, name string, data map[string]viewmodels.SaveData, actionId []byte) (int64, error) {
+func (s DataService) saveTableData(tx *sqlx.Tx, path, name string, data models.SimpleData) (int64, error) {
+	if !s.repository.IsSqlFileExist(path, name) {
+		return 0, nil
+	}
+
+	var count int64 = 0
+	rowsLen := len(data.Rows)
+	for i := 0; i < rowsLen; i++ {
+		affected, err := s.repository.Update(tx, path, name, getParamMap(data, i))
+		if nil != err {
+			return count, err
+		}
+		count += affected
+	}
+
+	return count, nil
+}
+
+func (s DataService) DifferentiatedSave(path, name string, data map[string]viewmodels.SaveData, actionId []byte) (int64, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	affected, err := s.repository.DoInTransaction(func(tx *sqlx.Tx) (int64, error) {
@@ -223,7 +241,50 @@ func (s DataService) PostDifferentiatedSave(path, name string, data map[string]v
 			return 0, nil
 		}
 
-		return 0, nil
+		var count int64 = 0
+		for k, v := range data {
+			sqlName := fmt.Sprintf("%s_%s", name, k)
+
+			if 0 < len(v.AddedData.Rows) {
+				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.AddedData, nil)
+				if nil != er {
+					return no, er
+				} else if 0 != no {
+					return no, errors.New("Unknown error.")
+				}
+
+				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.add", sqlName), v.AddedData)
+				if nil != er {
+					return count, er
+				}
+				count += aff
+			}
+
+			if 0 < len(v.DeletedData.Rows) {
+				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.delete", sqlName), v.AddedData)
+				if nil != er {
+					return count, er
+				}
+				count += aff
+			}
+
+			rowsLen := util.Min(len(v.ModifiedData.Rows), len(v.ModifiedOriginalData.Rows))
+			sqlName = fmt.Sprintf("%s.modify", sqlName)
+			for i := 0; i < rowsLen; i++ {
+				param := getParamMap(v.ModifiedData, i)
+				originalParam := getParamMap(v.ModifiedOriginalData, i)
+				for pk, pv := range originalParam {
+					param[fmt.Sprintf("Original_%s", pk)] = pv
+				}
+				aff, er := s.repository.Update(tx, path, sqlName, param)
+				if nil != er {
+					return count, er
+				}
+				count += aff
+			}
+		}
+
+		return count, nil
 	})
 	if nil != err {
 		return affected, err
@@ -232,6 +293,6 @@ func (s DataService) PostDifferentiatedSave(path, name string, data map[string]v
 	return affected, nil
 }
 
-func (s DataService) PostDifferentiatedSaveByParameter(parameter viewmodels.DifferentiatedSaveParameter) (int64, error) {
-	return s.PostDifferentiatedSave(parameter.Path, parameter.Name, parameter.Data, parameter.ActionId)
+func (s DataService) DifferentiatedSaveByParameter(parameter viewmodels.DifferentiatedSaveParameter) (int64, error) {
+	return s.DifferentiatedSave(parameter.Path, parameter.Name, parameter.Data, parameter.ActionId)
 }
