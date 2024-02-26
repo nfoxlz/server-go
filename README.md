@@ -1,1 +1,5 @@
-Compete Management Information System go language background.
+# CompeteMIS平台 Go版后台
+CompeteMIS平台是一个开源的低代码的MIS基础平台，通过本系统，可快速搭建ERP、MES、财务等MIS软件系统。仅需要使用SQL及少量的C#代码就可快速的搭建起应用。一般一个简单画面功能可以在几分钟内完成，复杂画面功能可以在几小时内完成。
+后台有Java语言和Go语言两种实现版本。这是Go版本。Go版后台使用Iris框架。与Java版相比，它的部署更加简单，不需要部署注册中心。
+
+**作者邮箱：** 4043171@qq.com
