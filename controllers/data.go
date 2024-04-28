@@ -51,8 +51,15 @@ func (c *DataController) PostDifferentiatedSave(parameter viewmodels.Differentia
 
 	c.service.SetContext(c.Ctx)
 	no, err := c.service.DifferentiatedSaveByParameter(parameter)
-	return viewmodels.Result{
-		ErrorNo: no,
-		Message: err.Error(),
+	if nil == err {
+		return viewmodels.Result{
+			ErrorNo: no,
+			Message: "",
+		}
+	} else {
+		return viewmodels.Result{
+			ErrorNo: no,
+			Message: err.Error(),
+		}
 	}
 }

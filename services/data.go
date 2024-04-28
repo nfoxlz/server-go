@@ -52,16 +52,19 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 		result.PageNo = 1
 	} else if beginNo < count {
 		parameters["begin_No"] = beginNo
-		parameters["page_Size"] = count
+		parameters["page_Size"] = size
 
 		result.PageNo = currentPageNo
 	} else {
-		parameters["begin_No"] = beginNo
-
 		pageNo := count / size
-		parameters["page_Size"] = pageNo * size
+		if count%size == 0 {
+			pageNo--
+		}
+		beginNo = pageNo * size
+		parameters["begin_No"] = beginNo
+		parameters["page_Size"] = count - beginNo
 
-		result.PageNo = pageNo
+		result.PageNo = pageNo + 1
 	}
 
 	tables, err := s.repository.QueryTables(path, name, parameters)
@@ -223,6 +226,7 @@ func (s DataService) saveTableData(tx *sqlx.Tx, path, name string, data models.S
 	var count int64 = 0
 	rowsLen := len(data.Rows)
 	for i := 0; i < rowsLen; i++ {
+		util.LogDebug(getParamMap(data, i))
 		affected, err := s.repository.Update(tx, path, name, getParamMap(data, i))
 		if nil != err {
 			return count, err
@@ -245,42 +249,50 @@ func (s DataService) DifferentiatedSave(path, name string, data map[string]viewm
 		for k, v := range data {
 			sqlName := fmt.Sprintf("%s_%s", name, k)
 
-			if 0 < len(v.AddedData.Rows) {
-				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.AddedData, nil)
+			if 0 < len(v.AddedTable.Rows) {
+				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.AddedTable, nil)
 				if nil != er {
 					return no, er
 				} else if 0 != no {
 					return no, errors.New("Unknown error.")
 				}
 
-				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.add", sqlName), v.AddedData)
+				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.add", sqlName), v.AddedTable)
 				if nil != er {
 					return count, er
 				}
 				count += aff
 			}
 
-			if 0 < len(v.DeletedData.Rows) {
-				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.delete", sqlName), v.AddedData)
+			if 0 < len(v.DeletedTable.Rows) {
+				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.delete", sqlName), v.DeletedTable)
 				if nil != er {
 					return count, er
 				}
 				count += aff
 			}
 
-			rowsLen := util.Min(len(v.ModifiedData.Rows), len(v.ModifiedOriginalData.Rows))
-			sqlName = fmt.Sprintf("%s.modify", sqlName)
-			for i := 0; i < rowsLen; i++ {
-				param := getParamMap(v.ModifiedData, i)
-				originalParam := getParamMap(v.ModifiedOriginalData, i)
-				for pk, pv := range originalParam {
-					param[fmt.Sprintf("Original_%s", pk)] = pv
-				}
-				aff, er := s.repository.Update(tx, path, sqlName, param)
+			rowsLen := util.Min(len(v.ModifiedTable.Rows), len(v.ModifiedOriginalTable.Rows))
+			if 0 < rowsLen {
+				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.ModifiedTable, nil)
 				if nil != er {
-					return count, er
+					return no, er
+				} else if 0 != no {
+					return no, errors.New("Unknown error.")
 				}
-				count += aff
+				sqlName = fmt.Sprintf("%s.modify", sqlName)
+				for i := 0; i < rowsLen; i++ {
+					param := getParamMap(v.ModifiedTable, i)
+					originalParam := getParamMap(v.ModifiedOriginalTable, i)
+					for pk, pv := range originalParam {
+						param[fmt.Sprintf("Original_%s", pk)] = pv
+					}
+					aff, er := s.repository.Update(tx, path, sqlName, param)
+					if nil != er {
+						return count, er
+					}
+					count += aff
+				}
 			}
 		}
 

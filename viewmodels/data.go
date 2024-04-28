@@ -38,10 +38,10 @@ type SaveParameter struct {
 }
 
 type SaveData struct {
-	AddedData            models.SimpleData
-	DeletedData          models.SimpleData
-	ModifiedData         models.SimpleData
-	ModifiedOriginalData models.SimpleData
+	AddedTable            models.SimpleData
+	DeletedTable          models.SimpleData
+	ModifiedTable         models.SimpleData
+	ModifiedOriginalTable models.SimpleData
 }
 
 type DifferentiatedSaveParameter struct {

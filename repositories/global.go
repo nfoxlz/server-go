@@ -92,6 +92,9 @@ func getSql(path, name, driverName string) (string, error) {
 	return sqlCache.TryGet(fmt.Sprintf("%s/%s/%s/%s.sql", config.PluginsPath, path, driverName, name), func(key *string) (string, error) {
 		buf, err := os.ReadFile(*key)
 		if nil != err {
+			util.LogError(path)
+			util.LogError(driverName)
+			util.LogError(name)
 			util.LogError(err)
 			return "", err
 		}
@@ -151,11 +154,11 @@ func getMapFile(key *string) (map[string]string, error) {
 	result := make(map[string]string, 0)
 	lines := util.Split(string(buf))
 	for _, line := range lines {
-		kv := strings.Split(line, "=")
-		if 1 < len(kv) {
-			result[kv[0]] = kv[1]
+		index := strings.Index(line, "=")
+		if index >= 0 {
+			result[line[0:index]] = line[index+1:]
 		} else {
-			result[kv[0]] = kv[0]
+			result[line] = line
 		}
 	}
 

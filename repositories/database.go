@@ -150,6 +150,29 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 		if reflect.ValueOf(v).Kind() == reflect.Map {
 			parameters[k] = nil
 		}
+		// switch reflect.ValueOf(v).Kind() {
+		// case reflect.Map:
+		// 	parameters[k] = nil
+		// case reflect.String:
+		// 	if str, ok := v.(string); ok {
+		// 		if strings.HasSuffix(k, "_Date_Time") {
+		// 			t, err := time.Parse("2001-01-01 13:01:01", str)
+		// 			if err != nil {
+		// 				parameters[k] = t
+		// 			}
+		// 		} else if strings.HasSuffix(k, "_Date") {
+		// 			t, err := time.Parse("2001-01-01", str)
+		// 			if err != nil {
+		// 				parameters[k] = t
+		// 			}
+		// 		} else if strings.HasSuffix(k, "_Time") {
+		// 			t, err := time.Parse("2001-01-01", str)
+		// 			if err != nil {
+		// 				parameters[k] = t
+		// 			}
+		// 		}
+		// 	}
+		// }
 	}
 
 	return sql, parameters, nil
@@ -190,6 +213,9 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 
 	rows, err := db.NamedQuery(sql, parameters)
 	if nil != err {
+		util.LogError(path)
+		util.LogError(name)
+		util.LogError(sql)
 		util.LogError(err)
 		return err
 	}
@@ -206,6 +232,7 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 
 	rows, err := tx.NamedQuery(sql, parameters)
 	if nil != err {
+		util.LogError(sql)
 		util.LogError(err)
 		return err
 	}
