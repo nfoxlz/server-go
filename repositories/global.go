@@ -88,8 +88,12 @@ func getDriverName(name string) (string, error) {
 	return dbConfig.DriverName, nil
 }
 
+func getSqlName(path, name, driverName string) string {
+	return fmt.Sprintf("%s/%s/%s/%s.sql", config.PluginsPath, path, driverName, name)
+}
+
 func getSql(path, name, driverName string) (string, error) {
-	return sqlCache.TryGet(fmt.Sprintf("%s/%s/%s/%s.sql", config.PluginsPath, path, driverName, name), func(key *string) (string, error) {
+	return sqlCache.TryGet(getSqlName(path, name, driverName), func(key *string) (string, error) {
 		buf, err := os.ReadFile(*key)
 		if nil != err {
 			util.LogError(path)

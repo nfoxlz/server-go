@@ -37,6 +37,20 @@ func (c *FrameController) PostServerDateTime() (time.Time, error) {
 	return c.service.GetServerDateTime()
 }
 
+func (c *FrameController) PostAccountingDate() (time.Time, error) {
+	defer errorExit()
+
+	c.service.SetContext(c.Ctx)
+	return c.service.GetAccountingDate()
+}
+
+func (c *FrameController) PostConfigurations() (map[string]string, error) {
+	defer errorExit()
+
+	c.service.SetContext(c.Ctx)
+	return c.service.GetConfigurations()
+}
+
 func (c *FrameController) PostClearCache() {
 	repositories.InitCache()
 }

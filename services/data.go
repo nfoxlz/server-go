@@ -129,13 +129,15 @@ func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.Si
 				if nil != err {
 					return -1, err
 				}
-				no := m.(string)
-				if "" != no {
-					errNo, err := strconv.ParseInt(no, 10, 64)
-					if nil != err {
-						return -1, err
+				if nil != m {
+					no := m.(string)
+					if "" != no {
+						errNo, err := strconv.ParseInt(no, 10, 64)
+						if nil != err {
+							return -1, errors.New(no)
+						}
+						return errNo, errors.New(components.GetMessage(path, errNo, param))
 					}
-					return errNo, errors.New(components.GetMessage(path, errNo, param))
 				}
 			}
 		}
@@ -185,17 +187,18 @@ func (s DataService) Save(path, name string, data map[string]models.SimpleData, 
 			var sqlIndex int64 = 0
 			for i := 0; i < rowLen; i++ {
 				param := util.MergeMaps[string, any](relatedParam, getParamMap(v, i))
-				for s.repository.IsSqlFileExist(path, sqlName) {
-					rowAffected, err := s.repository.Update(tx, path, sqlName, param)
+				subSqlName := sqlName
+				for s.repository.IsSqlFileExist(path, subSqlName) {
+					rowAffected, err := s.repository.Update(tx, path, subSqlName, param)
 					if nil != err {
-						return count, err
+						return -2, err
 					}
 					if 0 >= rowAffected {
 						return -1, errors.New("并发冲突，数据没有保存，请稍后再试。")
 					}
 					count += rowAffected
 					sqlIndex++
-					sqlName = fmt.Sprintf("%s_%s_%d", name, k, sqlIndex)
+					subSqlName = fmt.Sprintf("%s_%s_%d", name, k, sqlIndex)
 				}
 			}
 		}

@@ -24,7 +24,7 @@ func (s *FrameService) GetMenus() ([]models.Menu, error) {
 	parameters := make(map[string]any)
 	parameters["application"] = 0
 	parameters["client_Side"] = 0
-	parameters["user_Id"] = s.CurrentUserId
+	// parameters["user_Id"] = s.CurrentUserId
 
 	var columns []string
 	menus := make([]models.Menu, 0)
@@ -75,6 +75,26 @@ func (s *FrameService) GetEnums() ([]models.EnumInfo, error) {
 	return enums, nil
 }
 
+func (s *FrameService) GetConfigurations() (map[string]string, error) {
+	s.repository.SetComponent(s.BusinessComponent)
+
+	configurations := make(map[string]string)
+	err := s.repository.Query("system/frame", "getConfigurations", nil, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
+		row, err := rows.SliceScan()
+		if nil != err {
+			return err
+		}
+		configurations[row[0].(string)] = row[1].(string)
+
+		return nil
+	})
+	if nil != err {
+		return nil, err
+	}
+
+	return configurations, nil
+}
+
 func (s *FrameService) GetServerDateTime() (time.Time, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
@@ -84,4 +104,10 @@ func (s *FrameService) GetServerDateTime() (time.Time, error) {
 	}
 
 	return result.(time.Time), nil
+}
+
+func (s *FrameService) GetAccountingDate() (time.Time, error) {
+	s.repository.SetComponent(s.BusinessComponent)
+
+	return s.repository.GetAccountingDate()
 }

@@ -2,8 +2,10 @@
 package repositories
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -38,6 +40,40 @@ func (r *DataRepository) getReadOnlyDriverName() (string, error) {
 	return getDriverName(r.CurrentTenant.ReadOnlyDbServerName)
 }
 
+func (r *DataRepository) GetAccountingDate() (time.Time, error) {
+	var year int
+	var month time.Month
+	var day int
+
+	year, month, day = time.Now().Date()
+
+	number, err := r.QueryScalar("system/frame", "getAccountingDate", nil)
+	if nil == err {
+		numberStr, ok := number.([]uint8)
+		if ok {
+			date, err := strconv.Atoi(string(numberStr))
+			if nil == err {
+				year = date / 10000
+				monthNum := date/100 - year*100
+				day = date - year*10000 - monthNum*100
+				month = time.Month(monthNum)
+			} else {
+				util.LogError(err)
+				util.LogError(number)
+				util.LogError(numberStr)
+			}
+		} else {
+			err = errors.New("Cannot be converted to integer type.")
+			util.LogError(err)
+			util.LogError(number)
+		}
+	} else {
+		util.LogError(err)
+	}
+
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC), err
+}
+
 func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
 	if sequenceInfo, ok := sequenceInfoMap[no]; ok {
 		var period int
@@ -50,9 +86,9 @@ func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
 		case models.Quarter:
 			period = now.Year()*10 + (int(now.Month())-1)/3
 		case models.Month:
-			period = now.Year()*100 + int(now.Month()) + toTenDays(now.Day())
+			period = now.Year()*100 + int(now.Month())
 		case models.TenDays:
-			period = now.Year()*1000 + int(now.Month())*10
+			period = now.Year()*1000 + int(now.Month())*10 + toTenDays(now.Day())
 		case models.Day:
 			period = now.Year()*10000 + int(now.Month())*100 + now.Day()
 		case models.Hour:
@@ -76,7 +112,7 @@ func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
 		r.Update(tx, "system/frame", "insertSerialNo", paramMap)
 
 		if nil == number {
-			number = 1
+			number = int64(1)
 		}
 
 		if "" == sequenceInfo.Format {
@@ -115,18 +151,31 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 					parameters[k] = id
 				} else {
 					util.LogError(err)
+					return "", parameters, err
 				}
-			case "currentTimeMillis", "currentDate":
+			case "currentTimeMillis":
 				parameters[k] = time.Now()
+			case "currentDate":
+				year, month, day := time.Now().Date()
+				parameters[k] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+			case "accountingDate":
+				accountingDate, err := r.GetAccountingDate()
+				if nil == err {
+					parameters[k] = accountingDate
+				} else {
+					util.LogError(err)
+					return "", parameters, err
+				}
 			default:
 				psp := strings.Split(v, ":")
 				switch psp[0] {
 				case "serialNo":
-					no, err := strconv.Atoi(psp[1])
+					no, err := strconv.ParseInt(psp[1], 10, 64)
 					if nil == err {
 						parameters[k] = r.getSerialNo(int64(no), tx)
 					} else {
 						util.LogError(err)
+						return "", parameters, err
 					}
 				}
 			}
@@ -178,6 +227,15 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 	return sql, parameters, nil
 }
 
+func (r *DataRepository) getSqlName(path, name string) (string, error) {
+	driverName, err := r.getDriverName()
+	if nil != err {
+		return "", err
+	}
+
+	return getSqlName(path, name, driverName), nil
+}
+
 func (r *DataRepository) getSql(path, name string, parameters map[string]any, tx *sqlx.Tx) (string, map[string]any, error) {
 	driverName, err := r.getDriverName()
 	if nil != err {
@@ -213,9 +271,9 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 
 	rows, err := db.NamedQuery(sql, parameters)
 	if nil != err {
-		util.LogError(path)
-		util.LogError(name)
-		util.LogError(sql)
+		// util.LogError(path)
+		// util.LogError(name)
+		// util.LogError(sql)
 		util.LogError(err)
 		return err
 	}
@@ -242,39 +300,54 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 }
 
 func (r *DataRepository) QueryTables(path, name string, parameters map[string]any) (map[string]models.SimpleData, error) {
-	var row []any
-	var err error
-	var table models.SimpleData
-	var tableName string
-	result := make(map[string]models.SimpleData, 0)
-	err = r.Query(path, name, parameters, func(index int64, rows *sqlx.Rows) error {
-		columns, err := rows.Columns()
-		if nil != err {
-			return err
-		}
-		table = models.SimpleData{}
-		if 0 == index {
-			tableName = name
-		} else {
-			tableName = fmt.Sprintf("%s_%d", name, index)
-		}
-		table.Columns = columns
-		table.Rows = make([][]any, 0)
-		return nil
-	}, func(_ int64, rows *sqlx.Rows) error {
-		result[tableName] = table
-		// result = append(result, table)
-		return nil
-	}, func(_, _ int64, rows *sqlx.Rows) error {
-		row, err = rows.SliceScan()
-		if nil != err {
-			return err
-		}
-		table.Rows = append(table.Rows, amend(row))
-		return nil
-	})
 
-	return result, nil
+	sqlName := name
+	fileName, err := r.getSqlName(path, sqlName)
+	if nil != err {
+		return nil, err
+	}
+
+	var row []any
+	var table models.SimpleData
+	result := make(map[string]models.SimpleData, 0)
+	i := 0
+	_, filErr := os.Stat(fileName)
+	for filErr == nil {
+		err = r.Query(path, sqlName, parameters, func(index int64, rows *sqlx.Rows) error {
+			columns, err := rows.Columns()
+			if nil != err {
+				return err
+			}
+			table = models.SimpleData{}
+			if 0 != index {
+				sqlName = fmt.Sprintf("%s_%d", sqlName, index)
+			}
+			table.Columns = columns
+			table.Rows = make([][]any, 0)
+			return nil
+		}, func(_ int64, rows *sqlx.Rows) error {
+			result[sqlName] = table
+			// result = append(result, table)
+			return nil
+		}, func(_, _ int64, rows *sqlx.Rows) error {
+			row, err = rows.SliceScan()
+			if nil != err {
+				return err
+			}
+			table.Rows = append(table.Rows, amend(row))
+			return nil
+		})
+
+		i++
+		sqlName = fmt.Sprintf("%s_%d", name, i)
+		fileName, err = r.getSqlName(path, sqlName)
+		if nil != err {
+			return result, err
+		}
+		_, filErr = os.Stat(fileName)
+	}
+
+	return result, err
 }
 
 func (r *DataRepository) QueryScalar(path, name string, parameters map[string]any) (any, error) {
