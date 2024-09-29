@@ -74,29 +74,37 @@ func (r *DataRepository) GetAccountingDate() (time.Time, error) {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC), err
 }
 
-func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
+func (r *DataRepository) GetServerDateTime() (time.Time, error) {
+	result, err := r.QueryScalar("system/frame", "getServerDateTime", nil)
+	if nil != err {
+		return time.Time{}, err
+	}
+
+	return result.(time.Time), nil
+}
+
+func (r *DataRepository) getSerialNoByTime(no int64, accountingDate time.Time, tx *sqlx.Tx) string {
 	if sequenceInfo, ok := sequenceInfoMap[no]; ok {
 		var period int
-		now := time.Now()
 		switch sequenceInfo.PeriodType {
 		case models.None:
 			period = 0
 		case models.Year:
-			period = now.Year()
+			period = accountingDate.Year()
 		case models.Quarter:
-			period = now.Year()*10 + (int(now.Month())-1)/3
+			period = accountingDate.Year()*10 + (int(accountingDate.Month())-1)/3
 		case models.Month:
-			period = now.Year()*100 + int(now.Month())
+			period = accountingDate.Year()*100 + int(accountingDate.Month())
 		case models.TenDays:
-			period = now.Year()*1000 + int(now.Month())*10 + toTenDays(now.Day())
+			period = accountingDate.Year()*1000 + int(accountingDate.Month())*10 + toTenDays(accountingDate.Day())
 		case models.Day:
-			period = now.Year()*10000 + int(now.Month())*100 + now.Day()
+			period = accountingDate.Year()*10000 + int(accountingDate.Month())*100 + accountingDate.Day()
 		case models.Hour:
-			period = now.Year()*1000000 + int(now.Month())*10000 + now.Day()*100 + now.Hour()
+			period = accountingDate.Year()*1000000 + int(accountingDate.Month())*10000 + accountingDate.Day()*100 + accountingDate.Hour()
 		case models.QuarterHour:
-			period = now.Year()*1000000 + now.YearDay()*1000 + now.Hour()*10 + now.Minute()/15
+			period = accountingDate.Year()*1000000 + accountingDate.YearDay()*1000 + accountingDate.Hour()*10 + accountingDate.Minute()/15
 		case models.Minute:
-			period = now.Year()*1000000 + (now.YearDay()-1)*1440 + now.Hour()*60 + now.Minute()
+			period = accountingDate.Year()*1000000 + (accountingDate.YearDay()-1)*1440 + accountingDate.Hour()*60 + accountingDate.Minute()
 		}
 
 		paramMap := make(map[string]any, 2)
@@ -123,6 +131,11 @@ func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
 	}
 
 	return ""
+}
+
+func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
+	serverDateTime, _ := r.GetServerDateTime()
+	return r.getSerialNoByTime(no, serverDateTime, tx)
 }
 
 func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters map[string]any, tx *sqlx.Tx) (string, map[string]any, error) {
@@ -156,6 +169,7 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 			case "currentTimeMillis":
 				parameters[k] = time.Now()
 			case "currentDate":
+				r.GetServerDateTime()
 				year, month, day := time.Now().Date()
 				parameters[k] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 			case "accountingDate":
@@ -173,6 +187,20 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 					no, err := strconv.ParseInt(psp[1], 10, 64)
 					if nil == err {
 						parameters[k] = r.getSerialNo(int64(no), tx)
+					} else {
+						util.LogError(err)
+						return "", parameters, err
+					}
+				case "accountingSerialNo":
+					accountingDate, err := r.GetAccountingDate()
+					if nil != err {
+						util.LogError(err)
+						return "", parameters, err
+					}
+
+					no, err := strconv.ParseInt(psp[1], 10, 64)
+					if nil == err {
+						parameters[k] = r.getSerialNoByTime(int64(no), accountingDate, tx)
 					} else {
 						util.LogError(err)
 						return "", parameters, err
@@ -269,12 +297,12 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 		return err
 	}
 
+	util.LogDebug("SQL: ", sql)
+	util.LogDebug("parameters: ", parameters)
+
 	rows, err := db.NamedQuery(sql, parameters)
 	if nil != err {
-		// util.LogError(path)
-		// util.LogError(name)
-		// util.LogError(sql)
-		util.LogError(err)
+		util.LogError(path, name, err)
 		return err
 	}
 	defer rows.Close()
@@ -288,10 +316,12 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 		return err
 	}
 
+	util.LogDebug("SQL: ", sql)
+	util.LogDebug("parameters: ", parameters)
+
 	rows, err := tx.NamedQuery(sql, parameters)
 	if nil != err {
-		util.LogError(sql)
-		util.LogError(err)
+		util.Log.LogError(path, name, err)
 		return err
 	}
 	defer rows.Close()
@@ -299,7 +329,7 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 	return tablesScan(rows, beforHandler, afterHandler, handler)
 }
 
-func (r *DataRepository) QueryTables(path, name string, parameters map[string]any) (map[string]models.SimpleData, error) {
+func (r *DataRepository) QueryTables(path, name string, parameters map[string]any) ([]models.SimpleData, error) {
 
 	sqlName := name
 	fileName, err := r.getSqlName(path, sqlName)
@@ -309,7 +339,7 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 
 	var row []any
 	var table models.SimpleData
-	result := make(map[string]models.SimpleData, 0)
+	result := make([]models.SimpleData, 0)
 	i := 0
 	_, filErr := os.Stat(fileName)
 	for filErr == nil {
@@ -322,12 +352,13 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 			if 0 != index {
 				sqlName = fmt.Sprintf("%s_%d", sqlName, index)
 			}
+			table.TableName = sqlName
 			table.Columns = columns
 			table.Rows = make([][]any, 0)
 			return nil
 		}, func(_ int64, rows *sqlx.Rows) error {
-			result[sqlName] = table
-			// result = append(result, table)
+			// result[sqlName] = table
+			result = append(result, table)
 			return nil
 		}, func(_, _ int64, rows *sqlx.Rows) error {
 			row, err = rows.SliceScan()
@@ -411,6 +442,7 @@ func (r *DataRepository) DoInTransaction(handler ExecHandler) (int64, error) {
 				util.LogError(err)
 			}
 		} else {
+			util.LogError(txErr)
 			err = tx.Rollback() // err is non-nil; don't change it
 			if nil != err {
 				util.LogError(err)
@@ -436,31 +468,23 @@ func (r *DataRepository) Update(tx *sqlx.Tx, path, name string, parameters map[s
 		if "" == updateSql {
 			continue
 		}
+
+		util.LogDebug("SQL: ", sql)
+		util.LogDebug("parameters: ", parameters)
+
 		result, err := tx.NamedExec(updateSql, parameters)
 		if nil != err {
-			util.LogError(err)
+			util.LogError(path, name, err)
 			return -1, err
 		}
 		affected, err := result.RowsAffected()
 		if nil != err {
-			util.LogError(err)
+			util.LogError(path, name, err)
 			return -1, err
 		}
 		count += affected
 	}
 	return count, nil
-
-	// result, err := tx.NamedExec(sql, parameters)
-	// if nil != err {
-	// 	util.LogError(err)
-	// 	return -1, err
-	// }
-	// affected, err := result.RowsAffected()
-	// if nil != err {
-	// 	util.LogError(err)
-	// 	return -1, err
-	// }
-	// return affected, nil
 }
 
 func (r *DataRepository) IsSqlFileExist(path, name string) bool {
@@ -479,7 +503,7 @@ func (r *DataRepository) getRelatedParamSettings(path, name string) (map[string]
 	return getRelatedParamSettings(path, name, r.CurrentTenant.DbServerName)
 }
 
-func (r *DataRepository) GetRelatedParam(path, name string, data map[string]models.SimpleData) (map[string]any, error) {
+func (r *DataRepository) GetRelatedParam(path, name string, data []models.SimpleData) (map[string]any, error) {
 	if !r.isRelatedParamFileExist(path, name) || nil == data || 0 == len(data) {
 		return nil, nil
 	}
@@ -491,15 +515,18 @@ func (r *DataRepository) GetRelatedParam(path, name string, data map[string]mode
 
 	result := make(map[string]any)
 	for k, v := range settings {
-		if table, ok := data[v]; ok && 0 < len(table.Rows) {
-			rows := table.Rows
-			columns := table.Columns
-			columnLen := len(columns)
-			for i := 0; i < columnLen; i++ {
-				if k == columns[i] {
-					result[k] = rows[i]
-					break
+		for _, table := range data {
+			if table.TableName == v && 0 < len(table.Rows) {
+				rows := table.Rows
+				columns := table.Columns
+				columnLen := len(columns)
+				for i := 0; i < columnLen; i++ {
+					if k == columns[i] {
+						result[k] = rows[0][i]
+						break
+					}
 				}
+				break
 			}
 		}
 	}

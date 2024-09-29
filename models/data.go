@@ -2,8 +2,9 @@
 package models
 
 type SimpleData struct {
-	Columns []string
-	Rows    [][]any
+	TableName string
+	Columns   []string
+	Rows      [][]any
 }
 
 // type SimpleDataTable struct {

@@ -324,7 +324,8 @@ func tablesScan(rows *sqlx.Rows, beforHandler, afterHandler QueryHandler, handle
 func amend(data []any) []any {
 	for index, item := range data {
 		if val, ok := item.([]byte); ok {
-			str := strings.Trim(string(val), " ")
+
+			str := strings.Replace(strings.Trim(string(val), " "), ",", "", -1)
 
 			if 1 < len(str) {
 				if "$" == string(str[0]) {

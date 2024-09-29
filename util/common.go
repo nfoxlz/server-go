@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 
 	"github.com/google/uuid"
@@ -218,21 +217,6 @@ var lineSplit string
 
 func Split(s string) []string {
 	return strings.Split(s, lineSplit)
-}
-
-func LogDebug(v ...any) {
-	if isDebug {
-		log.Println(v)
-	}
-}
-
-func LogError(v ...any) {
-	log.Println(v)
-	if isDebug {
-		log.Println("==================================================")
-		debug.PrintStack()
-		log.Println("==================================================")
-	}
 }
 
 func Min(a, b int) int {

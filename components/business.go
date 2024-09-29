@@ -10,6 +10,7 @@ import (
 type BusinessComponent struct {
 	CurrentTenant models.Tenant
 	CurrentUserId int64
+	// Ctx           iris.Context
 }
 
 func (c *BusinessComponent) SetContext(ctx iris.Context) {
@@ -27,4 +28,5 @@ func (c *BusinessComponent) SetTenantUser(tenant models.Tenant, userId int64) {
 func (c *BusinessComponent) SetComponent(component BusinessComponent) {
 	c.CurrentTenant = component.CurrentTenant
 	c.CurrentUserId = component.CurrentUserId
+	// c.Ctx = component.Ctx
 }

@@ -22,7 +22,7 @@ type PagingQueryParameter struct {
 }
 
 type PagingQueryResult struct {
-	Data   map[string]models.SimpleData
+	Data   []models.SimpleData
 	Count  uint64
 	PageNo uint64
 }
@@ -34,7 +34,8 @@ type ActionDataParameter struct {
 
 type SaveParameter struct {
 	ActionDataParameter
-	Data map[string]models.SimpleData
+	Data       []models.SimpleData
+	TableNames []string
 }
 
 type SaveData struct {

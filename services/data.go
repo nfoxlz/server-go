@@ -17,12 +17,12 @@ type DataService struct {
 	BusinessService
 }
 
-func (s DataService) Query(path, name string, parameters map[string]any) (map[string]models.SimpleData, error) {
+func (s DataService) Query(path, name string, parameters map[string]any) ([]models.SimpleData, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 	return s.repository.QueryTables(path, name, parameters)
 }
 
-func (s DataService) QueryByParameter(parameter viewmodels.QueryParameter) (map[string]models.SimpleData, error) {
+func (s DataService) QueryByParameter(parameter viewmodels.QueryParameter) ([]models.SimpleData, error) {
 	return s.Query(parameter.Path, parameter.Name, parameter.Parameters)
 }
 
@@ -113,7 +113,7 @@ func getParamMap(table models.SimpleData, index int) map[string]any {
 	return result
 }
 
-func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.SimpleData, data map[string]models.SimpleData) (int64, error) {
+func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.SimpleData, data []models.SimpleData) (int64, error) {
 	rowLen := len(table.Rows)
 	fileIndex := 0
 	for s.repository.IsSqlFileExist(path, name) {
@@ -148,10 +148,10 @@ func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.Si
 	return 0, nil
 }
 
-func (s DataService) verify(tx *sqlx.Tx, path, name string, data map[string]models.SimpleData) (int64, error) {
-	for k, v := range data {
-		sqlName := fmt.Sprintf("%s_%s.verify", name, k)
-		errNo, err := s.verifyTable(tx, path, sqlName, v, data)
+func (s DataService) verify(tx *sqlx.Tx, path, name string, data []models.SimpleData) (int64, error) {
+	for _, table := range data {
+		sqlName := fmt.Sprintf("%s_%s.verify", name, table.TableName)
+		errNo, err := s.verifyTable(tx, path, sqlName, table, data)
 		if 0 != errNo || nil != err {
 			return errNo, err
 		}
@@ -159,7 +159,7 @@ func (s DataService) verify(tx *sqlx.Tx, path, name string, data map[string]mode
 	return 0, nil
 }
 
-func (s DataService) Save(path, name string, data map[string]models.SimpleData, actionId []byte) (int64, error) {
+func (s DataService) Save(path, name string, data []models.SimpleData, actionId []byte) (int64, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	return s.repository.DoInTransaction(func(tx *sqlx.Tx) (int64, error) {
@@ -171,34 +171,38 @@ func (s DataService) Save(path, name string, data map[string]models.SimpleData, 
 		if 0 != errorNo {
 			return -1, err
 		}
-		// var firstData models.SimpleData
-		var count int64 = 0
-		for k, v := range data {
-			// if nil == firstData {
-			// 	firstData = v
-			// }
 
-			sqlName := fmt.Sprintf("%s_%s", name, k)
-			rowLen := len(v.Rows)
+		var count int64 = 0
+		for _, table := range data {
+			tableName := table.TableName
+
+			sqlName := fmt.Sprintf("%s_%s", name, tableName)
+			rowLen := len(table.Rows)
 			relatedParam, err := s.repository.GetRelatedParam(path, sqlName, data)
 			if nil != err {
 				return -1, err
 			}
+
 			var sqlIndex int64 = 0
 			for i := 0; i < rowLen; i++ {
-				param := util.MergeMaps[string, any](relatedParam, getParamMap(v, i))
+
+				param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
 				subSqlName := sqlName
+
 				for s.repository.IsSqlFileExist(path, subSqlName) {
+
 					rowAffected, err := s.repository.Update(tx, path, subSqlName, param)
 					if nil != err {
 						return -2, err
 					}
+
 					if 0 >= rowAffected {
 						return -1, errors.New("并发冲突，数据没有保存，请稍后再试。")
 					}
+
 					count += rowAffected
 					sqlIndex++
-					subSqlName = fmt.Sprintf("%s_%s_%d", name, k, sqlIndex)
+					subSqlName = fmt.Sprintf("%s_%s.%d", name, tableName, sqlIndex)
 				}
 			}
 		}
@@ -210,6 +214,11 @@ func (s DataService) Save(path, name string, data map[string]models.SimpleData, 
 				util.LogError(err)
 				return -1, err
 			}
+
+			if 0 >= rowAffected {
+				return -1, errors.New("并发冲突，数据没有保存，请稍后再试。")
+			}
+
 			count += rowAffected
 		}
 

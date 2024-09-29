@@ -14,7 +14,7 @@ type DataController struct {
 	service services.DataService
 }
 
-func (c *DataController) PostQuery(parameter viewmodels.QueryParameter) (map[string]models.SimpleData, error) {
+func (c *DataController) PostQuery(parameter viewmodels.QueryParameter) ([]models.SimpleData, error) {
 	defer errorExit()
 
 	c.service.SetContext(c.Ctx)

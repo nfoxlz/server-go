@@ -98,12 +98,12 @@ func (s *FrameService) GetConfigurations() (map[string]string, error) {
 func (s *FrameService) GetServerDateTime() (time.Time, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
-	result, err := s.repository.QueryScalar("system/frame", "getServerDateTime", nil)
-	if nil != err {
-		return time.Time{}, err
-	}
+	// result, err := s.repository.QueryScalar("system/frame", "getServerDateTime", nil)
+	// if nil != err {
+	// 	return time.Time{}, err
+	// }
 
-	return result.(time.Time), nil
+	return s.repository.GetServerDateTime()
 }
 
 func (s *FrameService) GetAccountingDate() (time.Time, error) {
