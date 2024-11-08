@@ -21,6 +21,7 @@ import (
 var defaultConfig config.DbConfig
 
 var configCache components.Cache[string, config.DbConfig]
+var sqlConfigCache components.Cache[string, config.SqlConfig]
 var sqlCache components.Cache[string, string]
 var paramCache components.Cache[string, map[string]string]
 var sysParamCache components.Cache[string, map[string]string]
@@ -50,6 +51,7 @@ func init() {
 
 func InitCache() {
 	configCache.Initialize()
+	sqlConfigCache.Initialize()
 	sqlCache.Initialize()
 	paramCache.Initialize()
 	sysParamCache.Initialize()
@@ -70,6 +72,26 @@ func getConfig(name string) (config.DbConfig, error) {
 		result := config.DbConfig{}
 
 		err := util.ReadJsonFile(fmt.Sprintf("database_%s.json", name), &result)
+		if nil != err {
+			util.LogError(err)
+			return result, err
+		}
+
+		return result, nil
+	})
+}
+
+func getSqlConfig(path, name string) (config.SqlConfig, error) {
+	fileName := fmt.Sprintf("%s/%s/%s.json", config.PluginsPath, path, name)
+	return sqlConfigCache.TryGet(fileName, func(_ *string) (config.SqlConfig, error) {
+		result := config.SqlConfig{UseTransaction: false}
+
+		_, err := os.Stat(fileName)
+		if os.IsNotExist(err) {
+			return result, nil
+		}
+
+		err = util.ReadJsonFile(fileName, &result)
 		if nil != err {
 			util.LogError(err)
 			return result, err

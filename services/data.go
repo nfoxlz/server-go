@@ -26,14 +26,16 @@ func (s DataService) QueryByParameter(parameter viewmodels.QueryParameter) ([]mo
 	return s.Query(parameter.Path, parameter.Name, parameter.Parameters)
 }
 
-func (s DataService) PagingQuery(path, name string, parameters map[string]any, currentPageNo uint64, pageSize uint16) (viewmodels.PagingQueryResult, error) {
+func (s DataService) PagingQuery(path, name string, parameters map[string]any, currentPageNo uint64, pageSize uint16) viewmodels.PagingQueryResult {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	var result viewmodels.PagingQueryResult
 
 	rowCount, err := s.repository.QueryScalar(path, name+".count", parameters)
 	if nil != err {
-		return result, err
+		result.ErrorNo = -1
+		result.Message = err.Error()
+		return result
 	}
 
 	count := uint64(rowCount.(int64))
@@ -69,16 +71,18 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 
 	tables, err := s.repository.QueryTables(path, name, parameters)
 	if nil != err {
-		return result, err
+		result.ErrorNo = -1
+		result.Message = err.Error()
+		return result
 	}
 
 	result.Data = tables
 	result.Count = count
 
-	return result, nil
+	return result
 }
 
-func (s DataService) PagingQueryByParameter(parameter viewmodels.PagingQueryParameter) (viewmodels.PagingQueryResult, error) {
+func (s DataService) PagingQueryByParameter(parameter viewmodels.PagingQueryParameter) viewmodels.PagingQueryResult {
 	return s.PagingQuery(parameter.Path, parameter.Name, parameter.Parameters, parameter.CurrentPageNo, parameter.PageSize)
 }
 
@@ -171,7 +175,6 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 		if 0 != errorNo {
 			return -1, err
 		}
-
 		var count int64 = 0
 		for _, table := range data {
 			tableName := table.TableName

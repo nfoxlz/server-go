@@ -41,37 +41,31 @@ func (r *DataRepository) getReadOnlyDriverName() (string, error) {
 }
 
 func (r *DataRepository) GetAccountingDate() (time.Time, error) {
-	var year int
-	var month time.Month
-	var day int
-
-	year, month, day = time.Now().Date()
 
 	number, err := r.QueryScalar("system/frame", "getAccountingDate", nil)
 	if nil == err {
+		if nil == number {
+			return time.Time{}, nil
+		}
+
 		numberStr, ok := number.([]uint8)
 		if ok {
 			date, err := strconv.Atoi(string(numberStr))
 			if nil == err {
-				year = date / 10000
+				year := date / 10000
 				monthNum := date/100 - year*100
-				day = date - year*10000 - monthNum*100
-				month = time.Month(monthNum)
+				return time.Date(year, time.Month(monthNum), date-year*10000-monthNum*100, 0, 0, 0, 0, time.UTC), nil
 			} else {
-				util.LogError(err)
-				util.LogError(number)
 				util.LogError(numberStr)
 			}
 		} else {
 			err = errors.New("Cannot be converted to integer type.")
-			util.LogError(err)
-			util.LogError(number)
 		}
-	} else {
-		util.LogError(err)
+		util.LogError(number)
 	}
 
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC), err
+	util.LogError(err)
+	return time.Time{}, err
 }
 
 func (r *DataRepository) GetServerDateTime() (time.Time, error) {
@@ -310,6 +304,15 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 	return tablesScan(rows, beforHandler, afterHandler, handler)
 }
 
+func (r *DataRepository) QueryUseTransaction(path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
+
+	_, err := r.DoInTransaction(func(tx *sqlx.Tx) (int64, error) {
+		return 0, r.QueryForUpdate(tx, path, name, parameters, beforHandler, afterHandler, handler)
+	})
+
+	return err
+}
+
 func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
 	sql, parameters, err := r.getSql(path, name, parameters, tx)
 	if nil != err {
@@ -329,10 +332,17 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 	return tablesScan(rows, beforHandler, afterHandler, handler)
 }
 
+type queryExecuteHandler = func(path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error
+
 func (r *DataRepository) QueryTables(path, name string, parameters map[string]any) ([]models.SimpleData, error) {
 
 	sqlName := name
 	fileName, err := r.getSqlName(path, sqlName)
+	if nil != err {
+		return nil, err
+	}
+
+	config, err := getSqlConfig(path, sqlName)
 	if nil != err {
 		return nil, err
 	}
@@ -342,8 +352,16 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 	result := make([]models.SimpleData, 0)
 	i := 0
 	_, filErr := os.Stat(fileName)
+
+	var handler queryExecuteHandler
+	if config.UseTransaction {
+		handler = r.QueryUseTransaction
+	} else {
+		handler = r.Query
+	}
+
 	for filErr == nil {
-		err = r.Query(path, sqlName, parameters, func(index int64, rows *sqlx.Rows) error {
+		err = handler(path, sqlName, parameters, func(index int64, rows *sqlx.Rows) error {
 			columns, err := rows.Columns()
 			if nil != err {
 				return err
@@ -368,6 +386,10 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 			table.Rows = append(table.Rows, amend(row))
 			return nil
 		})
+
+		if nil != err {
+			return result, err
+		}
 
 		i++
 		sqlName = fmt.Sprintf("%s_%d", name, i)
@@ -434,7 +456,7 @@ func (r *DataRepository) DoInTransaction(handler ExecHandler) (int64, error) {
 		if p := recover(); nil != p {
 			tx.Rollback()
 			log.Panic(p)
-			//util.LogError(err)
+			// util.LogError(err)
 			// panic(p) // re-throw panic after Rollback
 		} else if txErr == nil {
 			err = tx.Commit() // err is nil; if Commit returns error update err
@@ -442,11 +464,11 @@ func (r *DataRepository) DoInTransaction(handler ExecHandler) (int64, error) {
 				util.LogError(err)
 			}
 		} else {
-			util.LogError(txErr)
 			err = tx.Rollback() // err is non-nil; don't change it
 			if nil != err {
 				util.LogError(err)
 			}
+			// util.LogError(txErr)
 		}
 	}()
 
@@ -461,15 +483,17 @@ func (r *DataRepository) Update(tx *sqlx.Tx, path, name string, parameters map[s
 		return -1, err
 	}
 
+	util.LogDebug("SQL: ", sql)
+
 	var count int64 = 0
 	sqls := strings.Split(sql, ";")
 	for _, updateSql := range sqls {
-		updateSql = strings.Trim(updateSql, " ")
+		updateSql = strings.TrimSpace(updateSql)
 		if "" == updateSql {
 			continue
 		}
 
-		util.LogDebug("SQL: ", sql)
+		util.LogDebug("SQL: ", updateSql)
 		util.LogDebug("parameters: ", parameters)
 
 		result, err := tx.NamedExec(updateSql, parameters)

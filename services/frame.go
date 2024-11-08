@@ -75,11 +75,11 @@ func (s *FrameService) GetEnums() ([]models.EnumInfo, error) {
 	return enums, nil
 }
 
-func (s *FrameService) GetConfigurations() (map[string]string, error) {
+func (s *FrameService) GetSettings() (map[string]string, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	configurations := make(map[string]string)
-	err := s.repository.Query("system/frame", "getConfigurations", nil, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
+	err := s.repository.Query("system/frame", "getSettings", nil, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
 		row, err := rows.SliceScan()
 		if nil != err {
 			return err
@@ -110,4 +110,30 @@ func (s *FrameService) GetAccountingDate() (time.Time, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	return s.repository.GetAccountingDate()
+}
+
+func (s *FrameService) IsFinanceClosed() (bool, error) {
+	s.repository.SetComponent(s.BusinessComponent)
+
+	result, err := s.repository.QueryScalar("system/frame", "isFinanceClosed", nil)
+	if nil != err {
+		return false, err
+	}
+
+	return result.(bool), nil
+}
+
+func (s *FrameService) IsFinanceClosedByDate(periodYearMonth int) (bool, error) {
+	s.repository.SetComponent(s.BusinessComponent)
+
+	result, err := s.repository.QueryScalar("system/frame", "isFinanceClosedByDate", map[string]any{"Year_Month": periodYearMonth})
+	if nil != err {
+		return false, err
+	}
+
+	if nil == result {
+		return false, nil
+	}
+
+	return result.(bool), nil
 }

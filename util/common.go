@@ -18,6 +18,8 @@ import (
 
 var isDebug bool
 
+var DbBusinessExceptionPrefix string
+
 func init() {
 	goos := runtime.GOOS
 	switch goos {
@@ -40,6 +42,8 @@ func init() {
 	// 		return
 	// 	}
 	// }
+
+	// isDebug = true
 	isDebug = strings.Contains(os.Args[0], "debug")
 }
 
@@ -237,4 +241,18 @@ func MergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 	}
 
 	return result
+}
+
+func ExtractMessage(err error) (int64, string) {
+	message := err.Error()
+
+	var errNo int64
+	if DbBusinessExceptionPrefix == message[:4] {
+		message = message[4:]
+		errNo = -1
+	} else {
+		errNo = 0
+	}
+
+	return errNo, message
 }

@@ -7,6 +7,7 @@ import (
 	"server/models"
 	"server/repositories"
 	"server/services"
+	"server/viewmodels"
 
 	"github.com/kataras/iris/v12"
 )
@@ -44,13 +45,45 @@ func (c *FrameController) PostAccountingDate() (time.Time, error) {
 	return c.service.GetAccountingDate()
 }
 
-func (c *FrameController) PostConfigurations() (map[string]string, error) {
+func (c *FrameController) PostSettings() (map[string]string, error) {
 	defer errorExit()
 
 	c.service.SetContext(c.Ctx)
-	return c.service.GetConfigurations()
+	return c.service.GetSettings()
+}
+
+func (c *FrameController) PostIsFinanceClosed() (string, error) {
+	defer errorExit()
+
+	c.service.SetContext(c.Ctx)
+	isClose, err := c.service.IsFinanceClosed()
+	var result string
+	if isClose {
+		result = "true"
+	} else {
+		result = "false"
+	}
+
+	return result, err
+}
+
+func (c *FrameController) PostIsFinanceClosedByDate(parameter viewmodels.PeriodYearMonthParameter) (string, error) {
+	defer errorExit()
+
+	c.service.SetContext(c.Ctx)
+	isClose, err := c.service.IsFinanceClosedByDate(parameter.PeriodYearMonth)
+	var result string
+	if isClose {
+		result = "true"
+	} else {
+		result = "false"
+	}
+
+	return result, err
 }
 
 func (c *FrameController) PostClearCache() {
+	defer errorExit()
+
 	repositories.InitCache()
 }

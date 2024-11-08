@@ -21,8 +21,18 @@ type PagingQueryParameter struct {
 	PageSize      uint16
 }
 
+type Result struct {
+	ErrorNo int64
+	Message string
+}
+
+type QueryResult struct {
+	Data []models.SimpleData
+	Result
+}
+
 type PagingQueryResult struct {
-	Data   []models.SimpleData
+	QueryResult
 	Count  uint64
 	PageNo uint64
 }
@@ -48,9 +58,4 @@ type SaveData struct {
 type DifferentiatedSaveParameter struct {
 	ActionDataParameter
 	Data map[string]SaveData
-}
-
-type Result struct {
-	ErrorNo int64
-	Message string
 }

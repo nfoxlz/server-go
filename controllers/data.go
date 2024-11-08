@@ -2,8 +2,8 @@
 package controllers
 
 import (
-	"server/models"
 	"server/services"
+	"server/util"
 	"server/viewmodels"
 
 	"github.com/kataras/iris/v12"
@@ -14,14 +14,21 @@ type DataController struct {
 	service services.DataService
 }
 
-func (c *DataController) PostQuery(parameter viewmodels.QueryParameter) ([]models.SimpleData, error) {
+func (c *DataController) PostQuery(parameter viewmodels.QueryParameter) viewmodels.QueryResult {
 	defer errorExit()
 
 	c.service.SetContext(c.Ctx)
-	return c.service.QueryByParameter(parameter)
+
+	data, err := c.service.QueryByParameter(parameter)
+	result := viewmodels.QueryResult{Data: data}
+	if nil != err {
+		result.ErrorNo, result.Message = util.ExtractMessage(err)
+	}
+
+	return result
 }
 
-func (c *DataController) PostPagingQuery(parameter viewmodels.PagingQueryParameter) (viewmodels.PagingQueryResult, error) {
+func (c *DataController) PostPagingQuery(parameter viewmodels.PagingQueryParameter) viewmodels.PagingQueryResult {
 	defer errorExit()
 
 	c.service.SetContext(c.Ctx)
