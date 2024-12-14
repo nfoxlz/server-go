@@ -4,6 +4,7 @@ package web
 import (
 	"log"
 	"strconv"
+	"strings"
 
 	"server/components"
 	"server/repositories"
@@ -35,7 +36,8 @@ func getCookie(ctx iris.Context, name string) (int64, error) {
 
 func AuthorizationInterceptor() iris.Handler {
 	return func(ctx iris.Context) {
-		if "/api/Account/authenticate" != ctx.Path() {
+		path := ctx.Path()
+		if "/api/Account/authenticate" != path && !strings.HasPrefix(path, "/public/") {
 			tenantId, err := getCookie(ctx, components.TenantToken)
 			if nil != err {
 				return

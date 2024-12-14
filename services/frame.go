@@ -6,6 +6,7 @@ import (
 
 	"server/models"
 	"server/repositories"
+	"server/util"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -28,7 +29,7 @@ func (s *FrameService) GetMenus() ([]models.Menu, error) {
 
 	var columns []string
 	menus := make([]models.Menu, 0)
-	err := s.repository.Query("system/frame", "getMenus", parameters, func(_ int64, rows *sqlx.Rows) error {
+	err := s.repository.Query("system/frame", "getMenus", parameters, "", func(_ int64, rows *sqlx.Rows) error {
 		var result error
 		columns, result = rows.Columns()
 		return result
@@ -54,7 +55,7 @@ func (s *FrameService) GetEnums() ([]models.EnumInfo, error) {
 
 	var columns []string
 	enums := make([]models.EnumInfo, 0)
-	err := s.repository.Query("system/frame", "getEnums", nil, func(_ int64, rows *sqlx.Rows) error {
+	err := s.repository.Query("system/frame", "getEnums", nil, "", func(_ int64, rows *sqlx.Rows) error {
 		var result error
 		columns, result = rows.Columns()
 		return result
@@ -79,7 +80,7 @@ func (s *FrameService) GetSettings() (map[string]string, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	configurations := make(map[string]string)
-	err := s.repository.Query("system/frame", "getSettings", nil, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
+	err := s.repository.Query("system/frame", "getSettings", nil, "", nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
 		row, err := rows.SliceScan()
 		if nil != err {
 			return err
@@ -136,4 +137,44 @@ func (s *FrameService) IsFinanceClosedByDate(periodYearMonth int) (bool, error) 
 	}
 
 	return result.(bool), nil
+}
+
+func (s *FrameService) ModifyPassword(originalPassword, newPassword string) (bool, error) {
+	s.repository.SetComponent(s.BusinessComponent)
+
+	result, err := s.repository.DoInTransaction(func(tx *sqlx.Tx) (int64, error) {
+		password, err := s.repository.QueryScalarForUpdate(tx, "system/frame", "getPassword", nil)
+		if nil != err {
+			return 0, err
+		}
+
+		if util.Verify(originalPassword, password.(string)) {
+			userPassword, err := util.Encrypt(newPassword)
+			if nil == err {
+				return s.repository.Update(tx, "system/frame", "updatePassword", map[string]any{"password": userPassword})
+			}
+		}
+
+		return 0, nil
+	})
+
+	// password, err := s.repository.QueryScalar("system/frame", "getPassword", nil)
+	// if nil != err {
+	// 	return false, err
+	// }
+
+	// if util.Verify(originalPassword, password.(string)) {
+
+	// }
+
+	// result, err := s.repository.QueryScalar("system/frame", "modifyPassword", map[string]any{"password": newPassword})
+	// if nil != err {
+	// 	return false, err
+	// }
+
+	// if nil == result {
+	// 	return false, nil
+	// }
+
+	return result > 0, err
 }

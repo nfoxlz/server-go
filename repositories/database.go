@@ -132,7 +132,7 @@ func (r *DataRepository) getSerialNo(no int64, tx *sqlx.Tx) string {
 	return r.getSerialNoByTime(no, serverDateTime, tx)
 }
 
-func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters map[string]any, tx *sqlx.Tx) (string, map[string]any, error) {
+func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters map[string]any, sortDescription string, tx *sqlx.Tx) (string, map[string]any, error) {
 	sql, err := getSql(path, name, driverName)
 	if nil != err {
 		return "", parameters, err
@@ -246,6 +246,16 @@ func (r *DataRepository) getSqlByParam(path, name, driverName string, parameters
 		// }
 	}
 
+	if "" == sortDescription {
+		sql = strings.ReplaceAll(sql, "{order_By}", "")
+	} else {
+		if strings.Contains(strings.ToUpper(sql), "ORDER BY") {
+			sql = strings.ReplaceAll(sql, "{order_By}", " "+sortDescription+", ")
+		} else {
+			sql = strings.ReplaceAll(sql, "{order_By}", " ORDER BY "+sortDescription+" ")
+		}
+	}
+
 	return sql, parameters, nil
 }
 
@@ -258,27 +268,27 @@ func (r *DataRepository) getSqlName(path, name string) (string, error) {
 	return getSqlName(path, name, driverName), nil
 }
 
-func (r *DataRepository) getSql(path, name string, parameters map[string]any, tx *sqlx.Tx) (string, map[string]any, error) {
+func (r *DataRepository) getSql(path, name string, parameters map[string]any, sortDescription string, tx *sqlx.Tx) (string, map[string]any, error) {
 	driverName, err := r.getDriverName()
 	if nil != err {
 		return "", nil, err
 	}
-	return r.getSqlByParam(path, name, driverName, parameters, tx)
+	return r.getSqlByParam(path, name, driverName, parameters, sortDescription, tx)
 }
 
-func (r *DataRepository) getReadOnlySql(path, name string, parameters map[string]any) (string, map[string]any, error) {
+func (r *DataRepository) getReadOnlySql(path, name string, parameters map[string]any, sortDescription string) (string, map[string]any, error) {
 	driverName, err := r.getReadOnlyDriverName()
 	if nil != err {
 		return "", parameters, err
 	}
-	return r.getSqlByParam(path, name, driverName, parameters, nil)
+	return r.getSqlByParam(path, name, driverName, parameters, sortDescription, nil)
 }
 
 type QueryRowHandler = func(int64, int64, *sqlx.Rows) error
 
 type QueryHandler = func(int64, *sqlx.Rows) error
 
-func (r *DataRepository) Query(path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
+func (r *DataRepository) Query(path, name string, parameters map[string]any, sortDescription string, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
 	db, err := r.createReadOnlyDb()
 	if nil != err {
 		util.LogError(err)
@@ -286,7 +296,7 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 	}
 	defer db.Close()
 
-	sql, parameters, err := r.getReadOnlySql(path, name, parameters)
+	sql, parameters, err := r.getReadOnlySql(path, name, parameters, sortDescription)
 	if nil != err {
 		return err
 	}
@@ -304,17 +314,17 @@ func (r *DataRepository) Query(path, name string, parameters map[string]any, bef
 	return tablesScan(rows, beforHandler, afterHandler, handler)
 }
 
-func (r *DataRepository) QueryUseTransaction(path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
+func (r *DataRepository) QueryUseTransaction(path, name string, parameters map[string]any, sortDescription string, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
 
 	_, err := r.DoInTransaction(func(tx *sqlx.Tx) (int64, error) {
-		return 0, r.QueryForUpdate(tx, path, name, parameters, beforHandler, afterHandler, handler)
+		return 0, r.QueryForUpdate(tx, path, name, parameters, sortDescription, beforHandler, afterHandler, handler)
 	})
 
 	return err
 }
 
-func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
-	sql, parameters, err := r.getSql(path, name, parameters, tx)
+func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, parameters map[string]any, sortDescription string, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error {
+	sql, parameters, err := r.getSql(path, name, parameters, sortDescription, tx)
 	if nil != err {
 		return err
 	}
@@ -332,9 +342,9 @@ func (r *DataRepository) QueryForUpdate(tx *sqlx.Tx, path, name string, paramete
 	return tablesScan(rows, beforHandler, afterHandler, handler)
 }
 
-type queryExecuteHandler = func(path, name string, parameters map[string]any, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error
+type queryExecuteHandler = func(path, name string, parameters map[string]any, sortDescription string, beforHandler, afterHandler QueryHandler, handler QueryRowHandler) error
 
-func (r *DataRepository) QueryTables(path, name string, parameters map[string]any) ([]models.SimpleData, error) {
+func (r *DataRepository) QueryTables(path, name string, parameters map[string]any, sortDescription string) ([]models.SimpleData, error) {
 
 	sqlName := name
 	fileName, err := r.getSqlName(path, sqlName)
@@ -361,7 +371,7 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 	}
 
 	for filErr == nil {
-		err = handler(path, sqlName, parameters, func(index int64, rows *sqlx.Rows) error {
+		err = handler(path, sqlName, parameters, sortDescription, func(index int64, rows *sqlx.Rows) error {
 			columns, err := rows.Columns()
 			if nil != err {
 				return err
@@ -406,7 +416,7 @@ func (r *DataRepository) QueryTables(path, name string, parameters map[string]an
 func (r *DataRepository) QueryScalar(path, name string, parameters map[string]any) (any, error) {
 	var result any
 	var err error
-	err = r.Query(path, name, parameters, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
+	err = r.Query(path, name, parameters, "", nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
 		var row []any
 		row, err = rows.SliceScan()
 		if nil != err {
@@ -422,7 +432,7 @@ func (r *DataRepository) QueryScalar(path, name string, parameters map[string]an
 func (r *DataRepository) QueryScalarForUpdate(tx *sqlx.Tx, path, name string, parameters map[string]any) (any, error) {
 	var result any
 	var err error
-	err = r.QueryForUpdate(tx, path, name, parameters, nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
+	err = r.QueryForUpdate(tx, path, name, parameters, "", nil, nil, func(_, _ int64, rows *sqlx.Rows) error {
 		var row []any
 		row, err = rows.SliceScan()
 		if nil != err {
@@ -478,7 +488,7 @@ func (r *DataRepository) DoInTransaction(handler ExecHandler) (int64, error) {
 }
 
 func (r *DataRepository) Update(tx *sqlx.Tx, path, name string, parameters map[string]any) (int64, error) {
-	sql, parameters, err := r.getSql(path, name, parameters, tx)
+	sql, parameters, err := r.getSql(path, name, parameters, "", tx)
 	if nil != err {
 		return -1, err
 	}

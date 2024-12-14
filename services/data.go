@@ -19,14 +19,14 @@ type DataService struct {
 
 func (s DataService) Query(path, name string, parameters map[string]any) ([]models.SimpleData, error) {
 	s.repository.SetComponent(s.BusinessComponent)
-	return s.repository.QueryTables(path, name, parameters)
+	return s.repository.QueryTables(path, name, parameters, "")
 }
 
 func (s DataService) QueryByParameter(parameter viewmodels.QueryParameter) ([]models.SimpleData, error) {
 	return s.Query(parameter.Path, parameter.Name, parameter.Parameters)
 }
 
-func (s DataService) PagingQuery(path, name string, parameters map[string]any, currentPageNo uint64, pageSize uint16) viewmodels.PagingQueryResult {
+func (s DataService) PagingQuery(path, name string, parameters map[string]any, currentPageNo uint64, pageSize uint16, sortDescription string) viewmodels.PagingQueryResult {
 	s.repository.SetComponent(s.BusinessComponent)
 
 	var result viewmodels.PagingQueryResult
@@ -69,7 +69,9 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 		result.PageNo = pageNo + 1
 	}
 
-	tables, err := s.repository.QueryTables(path, name, parameters)
+	// parameters["order_By"] = sortDescription
+
+	tables, err := s.repository.QueryTables(path, name, parameters, sortDescription)
 	if nil != err {
 		result.ErrorNo = -1
 		result.Message = err.Error()
@@ -83,7 +85,7 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 }
 
 func (s DataService) PagingQueryByParameter(parameter viewmodels.PagingQueryParameter) viewmodels.PagingQueryResult {
-	return s.PagingQuery(parameter.Path, parameter.Name, parameter.Parameters, parameter.CurrentPageNo, parameter.PageSize)
+	return s.PagingQuery(parameter.Path, parameter.Name, parameter.Parameters, parameter.CurrentPageNo, parameter.PageSize, parameter.SortDescription)
 }
 
 func (s DataService) saveActionId(tx *sqlx.Tx, actionId []byte) bool {

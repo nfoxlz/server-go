@@ -1,4 +1,4 @@
 {
 	"driverName": "postgres",
-	"dataSourceName": "host=192.168.172.130 port=5432 user=superman password=1qaz@WSX123 dbname=authentication sslmode=disable"
+	"dataSourceName": "host=192.168.17.128 port=5432 user=superman password=1qaz@WSX123 dbname=authentication sslmode=disable"
 }

@@ -1,3 +1,4 @@
 {
-	"settingsPath": "D:/Projects/CompeteMIS/src/GitHub/config/server"
+	"settingsPath": "D:/Projects/CompeteMIS/src/GitHub/config/server",
+	"publicPath": "D:/Projects/CompeteMIS/release/public"
 }

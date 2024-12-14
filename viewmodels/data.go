@@ -17,8 +17,9 @@ type QueryParameter struct {
 
 type PagingQueryParameter struct {
 	QueryParameter
-	CurrentPageNo uint64
-	PageSize      uint16
+	CurrentPageNo   uint64
+	PageSize        uint16
+	SortDescription string
 }
 
 type Result struct {

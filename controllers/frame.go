@@ -52,6 +52,21 @@ func (c *FrameController) PostSettings() (map[string]string, error) {
 	return c.service.GetSettings()
 }
 
+func (c *FrameController) PostModifyPassword(parameter viewmodels.ModifyPasswordParameter) (string, error) {
+	defer errorExit()
+
+	c.service.SetContext(c.Ctx)
+	isSuccessful, err := c.service.ModifyPassword(parameter.OriginalPassword, parameter.NewPassword)
+	var result string
+	if isSuccessful {
+		result = "true"
+	} else {
+		result = "false"
+	}
+
+	return result, err
+}
+
 func (c *FrameController) PostIsFinanceClosed() (string, error) {
 	defer errorExit()
 

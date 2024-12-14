@@ -10,6 +10,7 @@ import (
 
 type GlobalConfig struct {
 	SettingsPath              string
+	PublicPath                string
 	DbBusinessExceptionPrefix string
 }
 
@@ -28,9 +29,11 @@ func init() {
 
 	util.DbBusinessExceptionPrefix = global.DbBusinessExceptionPrefix
 	PluginsPath = fmt.Sprintf("%s/plugins", global.SettingsPath)
+	PublicPath = global.PublicPath
 }
 
 var PluginsPath string
+var PublicPath string
 
 func GetPath(path string) string {
 	return fmt.Sprintf("%s/%s", global.SettingsPath, path)
