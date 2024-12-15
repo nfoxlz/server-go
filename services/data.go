@@ -177,6 +177,24 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 		if 0 != errorNo {
 			return -1, err
 		}
+
+		config, configErr := getSaveConfig(path, name)
+		var commonData map[string]any
+		if nil == configErr && "" != config.CommonTable {
+			for _, table := range data {
+				if config.CommonTable == table.TableName {
+					if 0 < len(table.Rows) {
+						commonData = make(map[string]any)
+						row := table.Rows[0]
+						for i, column := range table.Columns {
+							commonData[column] = row[i]
+						}
+					}
+					break
+				}
+			}
+		}
+
 		var count int64 = 0
 		for _, table := range data {
 			tableName := table.TableName
@@ -186,6 +204,16 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 			relatedParam, err := s.repository.GetRelatedParam(path, sqlName, data)
 			if nil != err {
 				return -1, err
+			}
+
+			if nil != commonData {
+				if nil == relatedParam {
+					relatedParam = commonData
+				} else {
+					for k, v := range commonData {
+						relatedParam[k] = v
+					}
+				}
 			}
 
 			var sqlIndex int64 = 0

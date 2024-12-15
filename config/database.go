@@ -9,3 +9,7 @@ type DbConfig struct {
 type SqlConfig struct {
 	UseTransaction bool `json:"useTransaction"`
 }
+
+type SaveConfig struct {
+	CommonTable string `json:"commonTable"`
+}
