@@ -493,7 +493,7 @@ func (r *DataRepository) Update(tx *sqlx.Tx, path, name string, parameters map[s
 		return -1, err
 	}
 
-	util.LogDebug("SQL: ", sql)
+	// util.LogDebug("SQL: ", sql)
 
 	var count int64 = 0
 	sqls := strings.Split(sql, ";")

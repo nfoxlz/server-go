@@ -216,12 +216,12 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 				}
 			}
 
-			var sqlIndex int64 = 0
 			for i := 0; i < rowLen; i++ {
 
 				param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
 				subSqlName := sqlName
 
+				var sqlIndex int64 = 0
 				for s.repository.IsSqlFileExist(path, subSqlName) {
 
 					rowAffected, err := s.repository.Update(tx, path, subSqlName, param)
