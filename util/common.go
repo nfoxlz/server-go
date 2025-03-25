@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/md5"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
 	"log"
@@ -55,14 +57,16 @@ func EncryptWithSalt(password string, salt []byte) (string, error) {
 		plaintext[i] += salt[i]
 	}
 
-	md5Hash := md5.New()
-	_, err := md5Hash.Write(plaintext)
+	// md5Hash := md5.New()
+	//hash := sha512.New()
+	hash := sha512.New()
+	_, err := hash.Write(plaintext)
 	if err != nil {
 		LogError(err)
 		return "", err
 	}
 
-	for _, value := range md5Hash.Sum(nil) {
+	for _, value := range hash.Sum(nil) {
 		salt = append(salt, value)
 	}
 
@@ -95,6 +99,17 @@ func Verify(password string, ciphertext string) bool {
 	return passwordCiphertext == ciphertext
 }
 
+func RSAEncrypt(plaintext, key []byte) {
+	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	publicKey := &privateKey.PublicKey
+	rsa.EncryptOAEP(sha512.New(), rand.Reader, publicKey, plaintext, nil)
+	//rsa.EncryptPKCS1v15(rand.Reader, privateKey, plaintext)
+}
+
+func RSADecrypt(ciphertext, key []byte) {
+	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	rsa.DecryptOAEP(sha512.New(), rand.Reader, privateKey, ciphertext, nil)
+}
 func AESEncrypt(plaintext, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if nil != err {
