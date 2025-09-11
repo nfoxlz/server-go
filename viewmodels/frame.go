@@ -2,10 +2,18 @@
 package viewmodels
 
 type PeriodYearMonthParameter struct {
-	PeriodYearMonth int
+	ViewModelBase
+	PeriodYearMonth int `json:"periodYearMonth"`
 }
 
 type ModifyPasswordParameter struct {
-	OriginalPassword string
-	NewPassword      string
+	ViewModelBase
+	OriginalPassword string `json:"originalPassword"`
+	NewPassword      string `json:"nNewPassword"`
+}
+
+type ViewModelBase struct {
+	Timestamp    string `json:"timestamp"`
+	SignPassword string `json:"Sign - password"`
+	// Sign string `json:"sign"`
 }

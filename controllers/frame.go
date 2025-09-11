@@ -2,11 +2,13 @@
 package controllers
 
 import (
+	"errors"
 	"time"
 
 	"server/models"
 	"server/repositories"
 	"server/services"
+	"server/util"
 	"server/viewmodels"
 
 	"github.com/kataras/iris/v12"
@@ -20,6 +22,7 @@ type FrameController struct {
 func (c *FrameController) PostMenus() ([]models.Menu, error) {
 	defer errorExit()
 
+	util.LogDebug("PostMenus")
 	c.service.SetContext(c.Ctx)
 	return c.service.GetMenus()
 }
@@ -55,7 +58,10 @@ func (c *FrameController) PostSettings() (map[string]string, error) {
 func (c *FrameController) PostModifyPassword(parameter viewmodels.ModifyPasswordParameter) (string, error) {
 	defer errorExit()
 
-	c.service.SetContext(c.Ctx)
+	if !c.service.CheckSign(&parameter, c.Ctx) {
+		return "false", errors.New("签名验证失败")
+	}
+	// c.service.SetContext(c.Ctx)
 	isSuccessful, err := c.service.ModifyPassword(parameter.OriginalPassword, parameter.NewPassword)
 	var result string
 	if isSuccessful {
@@ -85,7 +91,10 @@ func (c *FrameController) PostIsFinanceClosed() (string, error) {
 func (c *FrameController) PostIsFinanceClosedByDate(parameter viewmodels.PeriodYearMonthParameter) (string, error) {
 	defer errorExit()
 
-	c.service.SetContext(c.Ctx)
+	if !c.service.CheckSign(&parameter, c.Ctx) {
+		return "false", errors.New("签名验证失败")
+	}
+	// c.service.SetContext(c.Ctx)
 	isClose, err := c.service.IsFinanceClosedByDate(parameter.PeriodYearMonth)
 	var result string
 	if isClose {

@@ -6,20 +6,21 @@ import (
 )
 
 type DataParameter struct {
-	Path string
-	Name string
+	ViewModelBase
+	Path string `json:"path"`
+	Name string `json:"name"`
 }
 
 type QueryParameter struct {
 	DataParameter
-	Parameters map[string]any
+	Parameters map[string]any `json:"parameters"`
 }
 
 type PagingQueryParameter struct {
 	QueryParameter
-	CurrentPageNo   uint64
-	PageSize        uint16
-	SortDescription string
+	CurrentPageNo   uint64 `json:"currentPageNo"`
+	PageSize        uint16 `json:"pageSize"`
+	SortDescription string `json:"sortDescription"`
 }
 
 type Result struct {
@@ -40,23 +41,23 @@ type PagingQueryResult struct {
 
 type ActionDataParameter struct {
 	DataParameter
-	ActionId []byte
+	ActionId []byte `json:"actionId"`
 }
 
 type SaveParameter struct {
 	ActionDataParameter
-	Data       []models.SimpleData
-	TableNames []string
+	Data       []models.SimpleData `json:"data"`
+	TableNames []string            `json:"tableNames"`
 }
 
 type SaveData struct {
-	AddedTable            models.SimpleData
-	DeletedTable          models.SimpleData
-	ModifiedTable         models.SimpleData
-	ModifiedOriginalTable models.SimpleData
+	AddedTable            models.SimpleData `json:"addedTable"`
+	DeletedTable          models.SimpleData `json:"deletedTable"`
+	ModifiedTable         models.SimpleData `json:"modifiedTable"`
+	ModifiedOriginalTable models.SimpleData `json:"modifiedOriginalTable"`
 }
 
 type DifferentiatedSaveParameter struct {
 	ActionDataParameter
-	Data map[string]SaveData
+	Data map[string]SaveData `json:"data"`
 }

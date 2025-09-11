@@ -478,7 +478,7 @@ func (r *DataRepository) DoInTransaction(handler ExecHandler) (int64, error) {
 			if nil != err {
 				util.LogError(err)
 			}
-			// util.LogError(txErr)
+			util.LogError(txErr)
 		}
 	}()
 
@@ -508,12 +508,12 @@ func (r *DataRepository) Update(tx *sqlx.Tx, path, name string, parameters map[s
 
 		result, err := tx.NamedExec(updateSql, parameters)
 		if nil != err {
-			util.LogError(path, name, err)
+			util.LogError("NamedExec", err, path, name, updateSql, parameters)
 			return -1, err
 		}
 		affected, err := result.RowsAffected()
 		if nil != err {
-			util.LogError(path, name, err)
+			util.LogError("RowsAffected", path, name, err)
 			return -1, err
 		}
 		count += affected

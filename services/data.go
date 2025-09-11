@@ -33,7 +33,7 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 
 	rowCount, err := s.repository.QueryScalar(path, name+".count", parameters)
 	if nil != err {
-		result.ErrorNo = -1
+		result.ErrorNo = -2
 		result.Message = err.Error()
 		return result
 	}
@@ -73,7 +73,7 @@ func (s DataService) PagingQuery(path, name string, parameters map[string]any, c
 
 	tables, err := s.repository.QueryTables(path, name, parameters, sortDescription)
 	if nil != err {
-		result.ErrorNo = -1
+		result.ErrorNo = -2
 		result.Message = err.Error()
 		return result
 	}
@@ -119,51 +119,99 @@ func getParamMap(table models.SimpleData, index int) map[string]any {
 	return result
 }
 
-func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.SimpleData, data []models.SimpleData) (int64, error) {
-	rowLen := len(table.Rows)
+// func (s DataService) verifyTable(tx *sqlx.Tx, path, name string, table models.SimpleData, data []models.SimpleData) (int64, error) {
+// 	rowLen := len(table.Rows)
+// 	fileIndex := 0
+// 	for s.repository.IsSqlFileExist(path, name) {
+// 		// for index := 0; index < rowLen; index++ {
+// 		// 	relatedParam, err := s.repository.GetRelatedParam(path, name, data)
+// 		// 	if nil != err {
+// 		// 		return 0, err
+// 		// 	}
+// 		// 	// rowLen = len(table.Rows)
+// 		// 	for i := 0; i < rowLen; i++ {
+// 		// 		param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
+// 		// 		m, err := s.repository.QueryScalarForUpdate(tx, path, name, param)
+// 		// 		if nil != err {
+// 		// 			return -1, err
+// 		// 		}
+// 		// 		if nil != m {
+// 		// 			no := m.(string)
+// 		// 			if "" != no {
+// 		// 				errNo, err := strconv.ParseInt(no, 10, 64)
+// 		// 				if nil != err {
+// 		// 					return -1, errors.New(no)
+// 		// 				}
+// 		// 				return errNo, errors.New(components.GetMessage(path, errNo, param))
+// 		// 			}
+// 		// 		}
+// 		// 	}
+// 		// }
+// 		relatedParam, err := s.repository.GetRelatedParam(path, name, data)
+// 		if nil != err {
+// 			return 0, err
+// 		}
+// 		// rowLen = len(table.Rows)
+// 		for i := 0; i < rowLen; i++ {
+// 			param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
+// 			m, err := s.repository.QueryScalarForUpdate(tx, path, name, param)
+// 			if nil != err {
+// 				return -1, err
+// 			}
+// 			if nil != m {
+// 				no := m.(string)
+// 				if "" != no {
+// 					errNo, err := strconv.ParseInt(no, 10, 64)
+// 					if nil != err {
+// 						return -1, errors.New(no)
+// 					}
+// 					return errNo, errors.New(components.GetMessage(path, errNo, param))
+// 				}
+// 			}
+// 		}
+// 		fileIndex++
+// 		name = fmt.Sprintf("%s_%d", name, fileIndex)
+// 	}
+
+// 	return 0, nil
+// }
+
+func (s DataService) verifyData(tx *sqlx.Tx, path, name string, param map[string]any) (int64, error) {
 	fileIndex := 0
-	for s.repository.IsSqlFileExist(path, name) {
-		for index := 0; index < rowLen; index++ {
-			relatedParam, err := s.repository.GetRelatedParam(path, name, data)
-			if nil != err {
-				return 0, err
-			}
-			rowLen = len(table.Rows)
-			for i := 0; i < rowLen; i++ {
-				param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
-				m, err := s.repository.QueryScalarForUpdate(tx, path, name, param)
+	sqlName := fmt.Sprintf("%s.verify", name)
+	for s.repository.IsSqlFileExist(path, sqlName) {
+		m, err := s.repository.QueryScalarForUpdate(tx, path, sqlName, param)
+		if nil != err {
+			return -1, err
+		}
+		if nil != m {
+			no := m.(string)
+			if "" != no {
+				errNo, err := strconv.ParseInt(no, 10, 64)
 				if nil != err {
-					return -1, err
+					return -1, errors.New(no)
 				}
-				if nil != m {
-					no := m.(string)
-					if "" != no {
-						errNo, err := strconv.ParseInt(no, 10, 64)
-						if nil != err {
-							return -1, errors.New(no)
-						}
-						return errNo, errors.New(components.GetMessage(path, errNo, param))
-					}
-				}
+				return errNo, errors.New(components.GetMessage(path, errNo, param))
 			}
 		}
+
 		fileIndex++
-		name = fmt.Sprintf("%s_%d", name, fileIndex)
+		sqlName = fmt.Sprintf("%s.verify.%d", name, fileIndex)
 	}
 
 	return 0, nil
 }
 
-func (s DataService) verify(tx *sqlx.Tx, path, name string, data []models.SimpleData) (int64, error) {
-	for _, table := range data {
-		sqlName := fmt.Sprintf("%s_%s.verify", name, table.TableName)
-		errNo, err := s.verifyTable(tx, path, sqlName, table, data)
-		if 0 != errNo || nil != err {
-			return errNo, err
-		}
-	}
-	return 0, nil
-}
+// func (s DataService) verify(tx *sqlx.Tx, path, name string, data []models.SimpleData) (int64, error) {
+// 	for _, table := range data {
+// 		sqlName := fmt.Sprintf("%s_%s.verify", name, table.TableName)
+// 		errNo, err := s.verifyTable(tx, path, sqlName, table, data)
+// 		if 0 != errNo || nil != err {
+// 			return errNo, err
+// 		}
+// 	}
+// 	return 0, nil
+// }
 
 func (s DataService) Save(path, name string, data []models.SimpleData, actionId []byte) (int64, error) {
 	s.repository.SetComponent(s.BusinessComponent)
@@ -173,10 +221,10 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 			return 0, nil
 		}
 
-		errorNo, err := s.verify(tx, path, name, data)
-		if 0 != errorNo {
-			return -1, err
-		}
+		// errorNo, err := s.verify(tx, path, name, data)
+		// if 0 != errorNo {
+		// 	return -1, err
+		// }
 
 		config, configErr := getSaveConfig(path, name)
 		var commonData map[string]any
@@ -218,8 +266,13 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 
 			for i := 0; i < rowLen; i++ {
 
-				param := util.MergeMaps[string, any](relatedParam, getParamMap(table, i))
+				param := util.MergeMaps(relatedParam, getParamMap(table, i))
 				subSqlName := sqlName
+
+				errorNo, err := s.verifyData(tx, path, subSqlName, param)
+				if 0 != errorNo {
+					return errorNo, err
+				}
 
 				var sqlIndex int64 = 0
 				for s.repository.IsSqlFileExist(path, subSqlName) {
@@ -242,6 +295,12 @@ func (s DataService) Save(path, name string, data []models.SimpleData, actionId 
 
 		sqlName := fmt.Sprintf("%s.after", name)
 		if s.repository.IsSqlFileExist(path, sqlName) {
+
+			errorNo, err := s.verifyData(tx, path, sqlName, nil)
+			if 0 != errorNo {
+				return errorNo, err
+			}
+
 			rowAffected, err := s.repository.Update(tx, path, sqlName, nil)
 			if nil != err {
 				util.LogError(err)
@@ -271,8 +330,16 @@ func (s DataService) saveTableData(tx *sqlx.Tx, path, name string, data models.S
 	var count int64 = 0
 	rowsLen := len(data.Rows)
 	for i := 0; i < rowsLen; i++ {
-		util.LogDebug(getParamMap(data, i))
-		affected, err := s.repository.Update(tx, path, name, getParamMap(data, i))
+
+		param := getParamMap(data, i)
+		util.LogDebug(param)
+
+		errorNo, err := s.verifyData(tx, path, name, param)
+		if 0 != errorNo {
+			return errorNo, err
+		}
+
+		affected, err := s.repository.Update(tx, path, name, param)
 		if nil != err {
 			return count, err
 		}
@@ -295,12 +362,12 @@ func (s DataService) DifferentiatedSave(path, name string, data map[string]viewm
 			sqlName := fmt.Sprintf("%s_%s", name, k)
 
 			if 0 < len(v.AddedTable.Rows) {
-				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.AddedTable, nil)
-				if nil != er {
-					return no, er
-				} else if 0 != no {
-					return no, errors.New("Unknown error.")
-				}
+				// no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.AddedTable, nil)
+				// if nil != er {
+				// 	return no, er
+				// } else if 0 != no {
+				// 	return no, errors.New("Unknown error.")
+				// }
 
 				aff, er := s.saveTableData(tx, path, fmt.Sprintf("%s.add", sqlName), v.AddedTable)
 				if nil != er {
@@ -319,12 +386,12 @@ func (s DataService) DifferentiatedSave(path, name string, data map[string]viewm
 
 			rowsLen := util.Min(len(v.ModifiedTable.Rows), len(v.ModifiedOriginalTable.Rows))
 			if 0 < rowsLen {
-				no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.ModifiedTable, nil)
-				if nil != er {
-					return no, er
-				} else if 0 != no {
-					return no, errors.New("Unknown error.")
-				}
+				// no, er := s.verifyTable(tx, path, fmt.Sprintf("%s.verify", sqlName), v.ModifiedTable, nil)
+				// if nil != er {
+				// 	return no, er
+				// } else if 0 != no {
+				// 	return no, errors.New("Unknown error.")
+				// }
 				sqlName = fmt.Sprintf("%s.modify", sqlName)
 				for i := 0; i < rowsLen; i++ {
 					param := getParamMap(v.ModifiedTable, i)
@@ -332,6 +399,12 @@ func (s DataService) DifferentiatedSave(path, name string, data map[string]viewm
 					for pk, pv := range originalParam {
 						param[fmt.Sprintf("Original_%s", pk)] = pv
 					}
+
+					errorNo, err := s.verifyData(tx, path, sqlName, param)
+					if 0 != errorNo {
+						return errorNo, err
+					}
+
 					aff, er := s.repository.Update(tx, path, sqlName, param)
 					if nil != er {
 						return count, er

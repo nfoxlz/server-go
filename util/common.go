@@ -7,11 +7,15 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha512"
+	"crypto/sha3"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"io"
 	"log"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -45,6 +49,11 @@ func init() {
 	// 	}
 	// }
 
+	randKey = make([]byte, 32) // 32字节=256位
+	if _, err := rand.Read(randKey); err != nil {
+		LogError(err)
+	}
+
 	// isDebug = true
 	isDebug = strings.Contains(os.Args[0], "debug")
 }
@@ -58,8 +67,8 @@ func EncryptWithSalt(password string, salt []byte) (string, error) {
 	}
 
 	// md5Hash := md5.New()
-	//hash := sha512.New()
-	hash := sha512.New()
+	hash := sha3.New512()
+	// hash := sha512.New()
 	_, err := hash.Write(plaintext)
 	if err != nil {
 		LogError(err)
@@ -99,18 +108,20 @@ func Verify(password string, ciphertext string) bool {
 	return passwordCiphertext == ciphertext
 }
 
-func RSAEncrypt(plaintext, key []byte) {
-	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	publicKey := &privateKey.PublicKey
-	rsa.EncryptOAEP(sha512.New(), rand.Reader, publicKey, plaintext, nil)
-	//rsa.EncryptPKCS1v15(rand.Reader, privateKey, plaintext)
+func RSAEncrypt(plaintext []byte) ([]byte, error) {
+	return rsa.EncryptOAEP(sha3.New512(), rand.Reader, &privateKey.PublicKey, plaintext, nil)
 }
 
-func RSADecrypt(ciphertext, key []byte) {
-	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	rsa.DecryptOAEP(sha512.New(), rand.Reader, privateKey, ciphertext, nil)
+func RSADecrypt(ciphertext []byte) ([]byte, error) {
+	return rsa.DecryptOAEP(sha3.New512(), rand.Reader, privateKey, ciphertext, nil)
 }
 func AESEncrypt(plaintext, key []byte) ([]byte, error) {
+
+	iv := make([]byte, aes.BlockSize) // 16字节IV
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		panic(err)
+	}
+
 	block, err := aes.NewCipher(key)
 	if nil != err {
 		LogError(err)
@@ -124,21 +135,26 @@ func AESEncrypt(plaintext, key []byte) ([]byte, error) {
 	plaintext = append(plaintext, bytes.Repeat([]byte{byte(pad)}, pad)...)
 
 	ciphertext := make([]byte, len(plaintext))
-	blockMode := cipher.NewCBCEncrypter(block, key[:blockSize])
+	blockMode := cipher.NewCBCEncrypter(block, iv)
 	blockMode.CryptBlocks(ciphertext, plaintext)
-	return ciphertext, nil
+
+	return append(iv, ciphertext...), nil
 }
 
 func AESDecrypt(ciphertext, key []byte) ([]byte, error) {
+
+	iv := ciphertext[:aes.BlockSize]
+	text := ciphertext[aes.BlockSize:]
+
 	block, err := aes.NewCipher(key)
 	if nil != err {
 		LogError(err)
 		return nil, err
 	}
 
-	plaintext := make([]byte, len(ciphertext))
-	blockMode := cipher.NewCBCDecrypter(block, key[:block.BlockSize()])
-	blockMode.CryptBlocks(plaintext, ciphertext)
+	plaintext := make([]byte, len(text))
+	blockMode := cipher.NewCBCDecrypter(block, iv)
+	blockMode.CryptBlocks(plaintext, text)
 
 	// PKCS7UnPadding
 	length := len(plaintext)
@@ -146,7 +162,13 @@ func AESDecrypt(ciphertext, key []byte) ([]byte, error) {
 	return plaintext[:(length - paddLen)], nil
 }
 
-var randKey = []byte{241, 251, 197, 239, 193, 229, 227, 241, 199, 211, 223, 233, 241, 229, 223, 199, 193, 233, 229, 229, 199, 223, 193, 233, 197, 193, 197, 211, 241, 197, 233, 229}
+var randKey = []byte{127, 203, 93, 145, 251, 180, 86, 246, 151, 233, 207, 61, 84, 250, 88, 97, 51, 175, 41, 99, 143, 225, 107, 94, 39, 24, 227, 113, 141, 230, 0, 133}
+
+var publicRandKey = []byte{241, 251, 197, 239, 193, 229, 227, 241, 199, 211, 223, 233, 241, 229, 223, 199, 193, 233, 229, 229, 199, 223, 193, 233, 197, 193, 197, 211, 241, 197, 233, 229}
+
+var privateKey, _ = rsa.GenerateKey(rand.Reader, 4096) // 使用 OaepSHA3_512 时，RSA密钥长度≥3072位（SHA3-384最低要求）‌
+
+// var publicKey = &privateKey.PublicKey
 
 // func init() {
 // 	randKey = make([]byte, 32)
@@ -161,6 +183,32 @@ var randKey = []byte{241, 251, 197, 239, 193, 229, 227, 241, 199, 211, 223, 233,
 // 		randKey[i] = key.Bytes()[0]
 // 	}
 // }
+
+func GetPublicKey() []byte {
+	pubASN1, _ := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+
+	ciphertext, err := AESEncryptWithPublicRand(pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubASN1,
+	}))
+	if nil != err {
+		LogError(err)
+		return nil
+	}
+	// LogDebug(pem.EncodeToMemory(&pem.Block{
+	// 	Type:  "PUBLIC KEY",
+	// 	Bytes: pubASN1,
+	// }))
+	return ciphertext
+}
+
+func AESEncryptWithPublicRand(plaintext []byte) ([]byte, error) {
+	return AESEncrypt(plaintext, publicRandKey)
+}
+
+func AESDecryptWithPublicRand(ciphertext []byte) ([]byte, error) {
+	return AESDecrypt(ciphertext, publicRandKey)
+}
 
 func AESEncryptWithRand(plaintext []byte) ([]byte, error) {
 	return AESEncrypt(plaintext, randKey)
@@ -270,4 +318,62 @@ func ExtractMessage(err error) (int64, string) {
 	}
 
 	return errNo, message
+}
+
+// func CheckSign(obj interface{}) bool {
+
+// 	// 1. 获取结构体的反射值
+// 	val := reflect.ValueOf(obj)
+// 	typ := val.Type() // 等同于 reflect.TypeOf(obj)
+
+// 	// 2. 遍历结构体字段
+// 	for i := 0; i < typ.NumField(); i++ {
+// 		field := typ.Field(i)      // 获取字段信息
+// 		fieldValue := val.Field(i) // 获取字段值
+
+// 		// 3. 获取字段元信息
+// 		fmt.Printf("字段名: %-10s 类型: %-15v 值: %v\n",
+// 			field.Name,
+// 			field.Type,
+// 			fieldValue.Interface())
+
+// 		// 4. 获取标签信息
+// 		if tag, ok := field.Tag.Lookup("json"); ok {
+// 			fmt.Printf("\tJSON标签: %s\n", tag)
+// 		}
+// 	}
+
+// 	jsonData, err := json.Marshal(obj)
+// 	if err != nil {
+// 		fmt.Println("序列化失败:", err)
+// 		return false
+// 	}
+
+// 	// ordered := make(map[string]interface{})
+
+// 	// err = json.Unmarshal(jsonData, &ordered)
+// 	// if err != nil {
+// 	// 	fmt.Println("序列化失败:", err)
+// 	// 	return false
+// 	// }
+
+// 	// jsonData1, err := json.Marshal(ordered)
+// 	// if err != nil {
+// 	// 	fmt.Println("序列化失败:", err)
+// 	// 	return false
+// 	// }
+
+// 	// 3. 输出结果
+// 	fmt.Println("序列化JSON:", string(jsonData))
+
+// 	return true
+// }
+
+func ModifyField(obj interface{}, fieldName string, newValue interface{}) {
+
+	field := reflect.ValueOf(obj).Elem().FieldByName(fieldName)
+
+	if field.IsValid() && field.CanSet() {
+		field.Set(reflect.ValueOf(newValue))
+	}
 }

@@ -22,6 +22,7 @@ type FrameService struct {
 func (s *FrameService) GetMenus() ([]models.Menu, error) {
 	s.repository.SetComponent(s.BusinessComponent)
 
+	util.LogDebug("GetMenus")
 	parameters := make(map[string]any)
 	parameters["application"] = 0
 	parameters["client_Side"] = 0
@@ -47,6 +48,7 @@ func (s *FrameService) GetMenus() ([]models.Menu, error) {
 		return nil, err
 	}
 
+	util.LogDebug("GetMenus")
 	return menus, nil
 }
 

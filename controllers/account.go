@@ -2,6 +2,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
@@ -21,9 +22,17 @@ type AccountController struct {
 func (c *AccountController) PostAuthenticate(model viewmodels.LoginViewModel) (models.User, error) {
 	defer errorExit()
 
+	if !c.service.CheckSignAuthenticate(&model, c.Ctx) {
+		return models.User{}, errors.New("签名验证失败")
+	}
+
 	result, err := c.service.AuthenticateAndGetUser(model)
 	if nil != err {
 		return result, err
+	}
+
+	if result.Id == 0 || result.Tenant.Id == 0 {
+		return models.User{}, errors.New("用户验证失败")
 	}
 
 	token, err := util.AESEncryptWithRandToString([]byte(fmt.Sprintf("%d", result.Tenant.Id)))
@@ -41,6 +50,10 @@ func (c *AccountController) PostAuthenticate(model viewmodels.LoginViewModel) (m
 	c.Ctx.SetCookieKV("USER_TOKEN", token)
 
 	return result, nil
+}
+
+func (c *AccountController) PostPublicKey() []byte {
+	return util.GetPublicKey()
 }
 
 func (c *AccountController) Get() string {
